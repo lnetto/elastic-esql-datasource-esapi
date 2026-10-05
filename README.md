@@ -51,7 +51,7 @@ Kibana's Data Federation UI can't create this type, so use **Dev Tools**:
 
 ```
 PUT _query/data_source/esapi
-{"type":"es_api"}
+{"type":"es_api","description":"Elastic API Endpoint"}
 ```
 
 It has no settings: every call runs as whoever runs the query.
