@@ -1,0 +1,4 @@
+ALL-UNNAMED:
+  # JDK HttpClient to this node's own HTTP port
+  - outbound_network
+  - manage_threads

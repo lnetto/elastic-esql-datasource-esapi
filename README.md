@@ -1,0 +1,254 @@
+# elastic-esql-datasource-esapi
+
+An **ES|QL Data Federation** connector that turns Elasticsearch's own REST APIs into tables.
+`FROM <dataset>` calls a cluster API **as the user running the query** and returns the JSON as rows.
+No credentials to configure.
+
+```esql
+FROM esapi_cat_indices
+| EVAL mb = ROUND(TO_LONG(store.size) / 1048576.0, 1)
+| SORT mb DESC | KEEP index, health, mb | LIMIT 5
+```
+
+> **Experimental.** ES|QL Data Federation is experimental in Elasticsearch 9.5 and this plugin uses its
+> internal SPI. Each zip works with exactly one Elasticsearch version. Community project, not an official
+> Elastic product.
+
+## 1. Install the plugin
+
+Use `dist/esql-datasource-esapi-0.1.0-es9.5.4.zip`, or build it:
+
+```bash
+./build-plugin.sh    # -> dist/esql-datasource-esapi-0.1.0-es9.5.4.zip
+```
+
+**Self-managed**, on every node, then restart them one by one:
+
+```bash
+bin/elasticsearch-plugin install file:///path/to/esql-datasource-esapi-0.1.0-es9.5.4.zip
+echo 'esql.federation.enabled: true' >> config/elasticsearch.yml
+```
+
+**Docker**, with the plugin baked into the image:
+
+```bash
+docker build -f docker/Dockerfile -t elasticsearch-esql-esapi:9.5.4 .
+```
+
+Run it with `-e esql.federation.enabled=true`.
+
+**Elastic Cloud Hosted:**
+
+1. **Deployments → Extensions → Create extension**: type *plugin*, version `9.5.4`, upload the zip.
+2. **Edit deployment → Elasticsearch → Manage plugins and extensions**: enable it.
+3. **Elasticsearch user settings**: `esql.federation.enabled: true`. Save (rolling restart).
+
+Needs a licence with ES|QL Data Federation (Enterprise or trial). Check with `GET _cat/plugins`.
+
+## 2. Create the data source
+
+Kibana's Data Federation UI can't create this type, so use **Dev Tools**:
+
+```
+PUT _query/data_source/es
+{"type":"es_api"}
+```
+
+It has no settings: every call runs as whoever runs the query.
+
+## 3. Create the datasets
+
+| Dataset | API | What you get |
+|---|---|---|
+| `esapi_cluster_health` | `_cluster/health` | Cluster status, node and shard counts (1 row) |
+| `esapi_cluster_stats` | `_cluster/stats` | Cluster-wide index, node, JVM and OS totals (1 row) |
+| `esapi_cluster_settings` | `_cluster/settings` | Persistent and transient cluster settings (1 row) |
+| `esapi_cluster_pending_tasks` | `_cluster/pending_tasks` | Cluster-state changes waiting to run |
+| `esapi_health_report` | `_health_report` | One row per health indicator (disk, shards, ILM, …) |
+| `esapi_license` | `_license` | Licence type, status and expiry (1 row) |
+| `esapi_nodes` | `_nodes` | Node info: roles, versions, settings, plugins |
+| `esapi_nodes_stats` | `_nodes/stats` | All node statistics (very wide; use `KEEP`) |
+| `esapi_nodes_stats_jvm_os` | `_nodes/stats/jvm,os` | Node JVM heap/GC and OS CPU/memory |
+| `esapi_cat_indices` | `_cat/indices` | One row per index: health, docs, size in bytes |
+| `esapi_cat_shards` | `_cat/shards` | One row per shard: state, node, size |
+| `esapi_cat_nodes` | `_cat/nodes` | One row per node: heap, RAM, CPU, load, roles |
+| `esapi_cat_allocation` | `_cat/allocation` | Disk use and shard count per node |
+| `esapi_cat_health` | `_cat/health` | Cluster health as a single row |
+| `esapi_cat_aliases` | `_cat/aliases` | One row per alias |
+| `esapi_cat_thread_pool` | `_cat/thread_pool` | Active, queued and rejected per thread pool per node |
+| `esapi_cat_recovery` | `_cat/recovery` | Shard recoveries, including finished ones |
+| `esapi_cat_segments` | `_cat/segments` | One row per Lucene segment |
+| `esapi_cat_plugins` | `_cat/plugins` | Plugins installed on each node |
+| `esapi_cat_master` | `_cat/master` | The elected master node |
+| `esapi_cat_nodeattrs` | `_cat/nodeattrs` | Custom node attributes |
+| `esapi_cat_fielddata` | `_cat/fielddata` | Fielddata memory per field per node |
+| `esapi_cat_templates` | `_cat/templates` | Index templates (summary) |
+| `esapi_cat_component_templates` | `_cat/component_templates` | Component templates (summary) |
+| `esapi_cat_tasks` | `_cat/tasks` | Running tasks (summary) |
+| `esapi_cat_repositories` | `_cat/repositories` | Snapshot repositories |
+| `esapi_cat_transforms` | `_cat/transforms` | Transforms (summary) |
+| `esapi_cat_ml_jobs` | `_cat/ml/anomaly_detectors` | ML anomaly detection jobs (summary) |
+| `esapi_cat_ml_datafeeds` | `_cat/ml/datafeeds` | ML datafeeds (summary) |
+| `esapi_index_stats` | `_stats` | One row per index: full indexing, search and store stats |
+| `esapi_data_streams` | `_data_stream` | One row per data stream: backing indices, lifecycle, template |
+| `esapi_index_templates` | `_index_template` | Index templates in full (wide) |
+| `esapi_component_templates` | `_component_template` | Component templates in full (wide) |
+| `esapi_ingest_pipelines` | `_ingest/pipeline` | One row per ingest pipeline, key in `_key` |
+| `esapi_ilm_explain` | `*/_ilm/explain` | ILM phase, action and step for every index |
+| `esapi_ilm_policies` | `_ilm/policy` | One row per ILM policy |
+| `esapi_slm_policies` | `_slm/policy` | One row per snapshot lifecycle policy |
+| `esapi_snapshot_repositories` | `_snapshot` | Snapshot repositories with their settings |
+| `esapi_tasks` | `_tasks` | Running tasks in detail |
+| `esapi_transforms` | `_transform` | Transform configurations |
+| `esapi_transform_stats` | `_transform/_stats` | Transform state and progress |
+| `esapi_ml_jobs` | `_ml/anomaly_detectors` | ML anomaly detection job configurations |
+| `esapi_ml_datafeeds` | `_ml/datafeeds` | ML datafeed configurations |
+| `esapi_security_authenticate` | `_security/_authenticate` | Who you are: user, roles, realm (1 row) |
+| `esapi_security_api_keys` | `_security/api_key` | Your own API keys |
+| `esapi_security_users` | `_security/user` | Native users |
+| `esapi_security_roles` | `_security/role` | Roles, name in `_key` |
+| `esapi_kibana_tasks` | `.kibana_task_manager/_search` | Kibana Task Manager tasks (up to 200) |
+
+Paste into Dev Tools and run all. Each dataset is one API; the name follows the path
+(`_cat/indices` → `esapi_cat_indices`).
+
+```
+PUT _query/dataset/esapi_cluster_health
+{"data_source":"es","resource":"esapi://_cluster/health"}
+PUT _query/dataset/esapi_cluster_stats
+{"data_source":"es","resource":"esapi://_cluster/stats"}
+PUT _query/dataset/esapi_cluster_settings
+{"data_source":"es","resource":"esapi://_cluster/settings","settings":{"params":{"flat_settings":true}}}
+PUT _query/dataset/esapi_cluster_pending_tasks
+{"data_source":"es","resource":"esapi://_cluster/pending_tasks"}
+PUT _query/dataset/esapi_health_report
+{"data_source":"es","resource":"esapi://_health_report","settings":{"path":"indicators.*"}}
+PUT _query/dataset/esapi_license
+{"data_source":"es","resource":"esapi://_license","settings":{"path":"license"}}
+PUT _query/dataset/esapi_nodes
+{"data_source":"es","resource":"esapi://_nodes"}
+PUT _query/dataset/esapi_nodes_stats
+{"data_source":"es","resource":"esapi://_nodes/stats"}
+PUT _query/dataset/esapi_nodes_stats_jvm_os
+{"data_source":"es","resource":"esapi://_nodes/stats/jvm%2Cos"}
+PUT _query/dataset/esapi_cat_indices
+{"data_source":"es","resource":"esapi://_cat/indices","settings":{"params":{"bytes":"b","expand_wildcards":"all"}}}
+PUT _query/dataset/esapi_cat_shards
+{"data_source":"es","resource":"esapi://_cat/shards","settings":{"params":{"bytes":"b"}}}
+PUT _query/dataset/esapi_cat_nodes
+{"data_source":"es","resource":"esapi://_cat/nodes","settings":{"params":{"bytes":"b","full_id":true}}}
+PUT _query/dataset/esapi_cat_allocation
+{"data_source":"es","resource":"esapi://_cat/allocation","settings":{"params":{"bytes":"b"}}}
+PUT _query/dataset/esapi_cat_health
+{"data_source":"es","resource":"esapi://_cat/health"}
+PUT _query/dataset/esapi_cat_aliases
+{"data_source":"es","resource":"esapi://_cat/aliases"}
+PUT _query/dataset/esapi_cat_thread_pool
+{"data_source":"es","resource":"esapi://_cat/thread_pool"}
+PUT _query/dataset/esapi_cat_recovery
+{"data_source":"es","resource":"esapi://_cat/recovery","settings":{"params":{"bytes":"b","active_only":false}}}
+PUT _query/dataset/esapi_cat_segments
+{"data_source":"es","resource":"esapi://_cat/segments","settings":{"params":{"bytes":"b"}}}
+PUT _query/dataset/esapi_cat_plugins
+{"data_source":"es","resource":"esapi://_cat/plugins"}
+PUT _query/dataset/esapi_cat_master
+{"data_source":"es","resource":"esapi://_cat/master"}
+PUT _query/dataset/esapi_cat_nodeattrs
+{"data_source":"es","resource":"esapi://_cat/nodeattrs"}
+PUT _query/dataset/esapi_cat_fielddata
+{"data_source":"es","resource":"esapi://_cat/fielddata","settings":{"params":{"bytes":"b"}}}
+PUT _query/dataset/esapi_cat_templates
+{"data_source":"es","resource":"esapi://_cat/templates"}
+PUT _query/dataset/esapi_cat_component_templates
+{"data_source":"es","resource":"esapi://_cat/component_templates"}
+PUT _query/dataset/esapi_cat_tasks
+{"data_source":"es","resource":"esapi://_cat/tasks"}
+PUT _query/dataset/esapi_cat_repositories
+{"data_source":"es","resource":"esapi://_cat/repositories"}
+PUT _query/dataset/esapi_cat_transforms
+{"data_source":"es","resource":"esapi://_cat/transforms"}
+PUT _query/dataset/esapi_cat_ml_jobs
+{"data_source":"es","resource":"esapi://_cat/ml/anomaly_detectors","settings":{"params":{"bytes":"b"}}}
+PUT _query/dataset/esapi_cat_ml_datafeeds
+{"data_source":"es","resource":"esapi://_cat/ml/datafeeds"}
+PUT _query/dataset/esapi_index_stats
+{"data_source":"es","resource":"esapi://_stats","settings":{"params":{"expand_wildcards":"all"},"path":"indices.*"}}
+PUT _query/dataset/esapi_data_streams
+{"data_source":"es","resource":"esapi://_data_stream","settings":{"params":{"expand_wildcards":"all"}}}
+PUT _query/dataset/esapi_index_templates
+{"data_source":"es","resource":"esapi://_index_template"}
+PUT _query/dataset/esapi_component_templates
+{"data_source":"es","resource":"esapi://_component_template"}
+PUT _query/dataset/esapi_ingest_pipelines
+{"data_source":"es","resource":"esapi://_ingest/pipeline","settings":{"path":"*"}}
+PUT _query/dataset/esapi_ilm_explain
+{"data_source":"es","resource":"esapi://%2A/_ilm/explain","settings":{"params":{"expand_wildcards":"all"},"path":"indices.*"}}
+PUT _query/dataset/esapi_ilm_policies
+{"data_source":"es","resource":"esapi://_ilm/policy","settings":{"path":"*"}}
+PUT _query/dataset/esapi_slm_policies
+{"data_source":"es","resource":"esapi://_slm/policy","settings":{"path":"*"}}
+PUT _query/dataset/esapi_snapshot_repositories
+{"data_source":"es","resource":"esapi://_snapshot","settings":{"path":"*"}}
+PUT _query/dataset/esapi_tasks
+{"data_source":"es","resource":"esapi://_tasks","settings":{"params":{"group_by":"none","detailed":true}}}
+PUT _query/dataset/esapi_transforms
+{"data_source":"es","resource":"esapi://_transform","settings":{"params":{"size":1000},"path":"transforms"}}
+PUT _query/dataset/esapi_transform_stats
+{"data_source":"es","resource":"esapi://_transform/_stats","settings":{"params":{"size":1000},"path":"transforms"}}
+PUT _query/dataset/esapi_ml_jobs
+{"data_source":"es","resource":"esapi://_ml/anomaly_detectors","settings":{"path":"jobs"}}
+PUT _query/dataset/esapi_ml_datafeeds
+{"data_source":"es","resource":"esapi://_ml/datafeeds","settings":{"path":"datafeeds"}}
+PUT _query/dataset/esapi_security_authenticate
+{"data_source":"es","resource":"esapi://_security/_authenticate"}
+PUT _query/dataset/esapi_security_api_keys
+{"data_source":"es","resource":"esapi://_security/api_key","settings":{"params":{"owner":true}}}
+PUT _query/dataset/esapi_security_users
+{"data_source":"es","resource":"esapi://_security/user","settings":{"path":"*"}}
+PUT _query/dataset/esapi_security_roles
+{"data_source":"es","resource":"esapi://_security/role","settings":{"path":"*"}}
+PUT _query/dataset/esapi_kibana_tasks
+{"data_source":"es","resource":"esapi://.kibana_task_manager/_search","settings":{"body":{"size":200}}}
+```
+
+Then `FROM esapi_cluster_health`, `FROM esapi_nodes_stats_jvm_os`, `FROM esapi_cat_shards`, …
+
+A dataset whose API has nothing to return (no transforms, no ML jobs, no pending tasks) fails with
+`Failed to resolve metadata` until there is data: the columns come from the response.
+
+### Your own
+
+```
+PUT _query/dataset/esapi_cat_shards_logs
+{"data_source":"es","resource":"esapi://_cat/shards/logs-%2A","settings":{"params":{"bytes":"b"}}}
+```
+
+| setting | |
+|---|---|
+| `resource` | `esapi://<API path>`. Percent-encode `*` `?` `,` (`%2A` `%3F` `%2C`) |
+| `params` | query-string parameters |
+| `body` | request body, sent with GET (for `_search`) |
+| `path` | where the rows are, if not found automatically (dots, `*` = every value, key in `_key`) |
+| `timeout` | seconds, default `60` |
+
+Rows are found automatically: one per element of a list (any `_cat`), per entry of an object of objects
+(`_nodes/stats`), per hit of a search, per row of an ES|QL response; anything else is one row. Nested
+objects become dotted columns. `_cat` returns numbers as strings, so `TO_LONG` them.
+
+## 4. Access
+
+Datasets are authorised by name like indices. One role entry covers them all:
+
+```
+"indices": [{ "names": ["esapi_*"], "privileges": ["read"] }]
+```
+
+Then each API checks its own privileges as usual: a user without `monitor` gets the same
+`security_exception` from `FROM esapi_nodes_stats` as from `GET _nodes/stats`. Only GET is ever sent.
+
+## Repository
+
+| path | |
+|---|---|
+| `plugin/` | the plugin (Java 21, ES 9.5.4) and its tests |
+| `scripts/extract-es-jars.sh` | pulls the SPI jars out of the stock ES image |
