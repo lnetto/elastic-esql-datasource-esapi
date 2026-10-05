@@ -27,6 +27,8 @@ import java.util.Map;
  *       {@code _stats}' {@code indices}): one row per entry, its key in {@code _key};</li>
  *   <li>anything else: one row.</li>
  * </ul>
+ * A response with nothing in it (no transforms, no pending tasks…) is no rows and a single null
+ * {@code _empty} column: ES|QL needs a column, and the real ones are only known from data.
  * Nested objects are flattened with dots ({@code jvm.mem.heap_used_percent}); lists of scalars become
  * multi-values; lists of objects become a JSON string. Types follow the values: long, double, boolean,
  * keyword (mixed types fall back to keyword), datetime for an ISO-8601 {@code @timestamp}.
@@ -36,6 +38,8 @@ final class JsonRows {
     record Column(String name, DataType type) {}
 
     record Table(List<Column> columns, List<Map<String, Object>> rows) {}
+
+    static final Column EMPTY = new Column("_empty", DataType.KEYWORD);
 
     private JsonRows() {}
 
@@ -59,7 +63,8 @@ final class JsonRows {
         } else {
             rows.add(row(node));
         }
-        return new Table(inferColumns(rows), rows);
+        List<Column> columns = inferColumns(rows);
+        return columns.isEmpty() ? new Table(List.of(EMPTY), List.of()) : new Table(columns, rows);
     }
 
     /** {"columns":[{"name","type"}...],"values":[[...]...]}, the ES|QL response shape. */

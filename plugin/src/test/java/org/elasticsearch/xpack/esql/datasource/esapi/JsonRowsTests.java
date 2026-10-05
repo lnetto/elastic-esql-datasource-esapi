@@ -61,6 +61,20 @@ class JsonRowsTests {
     }
 
     @Test
+    void emptyResponseIsNoRowsWithPlaceholderColumn() {
+        for (Object empty : List.of(List.of(), Map.of("tasks", List.of()))) {
+            JsonRows.Table t = JsonRows.toTable(empty, null);
+            assertEquals(List.of(JsonRows.EMPTY), t.columns(), String.valueOf(empty));
+            assertEquals(0, t.rows().size());
+        }
+        JsonRows.Table t = JsonRows.toTable(Map.of("count", 0, "transforms", List.of()), "transforms");
+        assertEquals(List.of(JsonRows.EMPTY), t.columns());
+        assertEquals(0, t.rows().size());
+        // a path that isn't there is still a configuration error
+        assertThrows(IllegalStateException.class, () -> JsonRows.toTable(Map.of("count", 0), "transforms"));
+    }
+
+    @Test
     void config() {
         EsApiConfig c = EsApiConfig.parse("esapi://_cat/indices?h=index", Map.of());
         assertEquals("/_cat/indices?h=index&format=json", c.apiPath());

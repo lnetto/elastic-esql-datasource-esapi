@@ -43,11 +43,6 @@ final class EsApiConnectorFactory implements ConnectorFactory {
     public SourceMetadata resolveMetadata(String location, Map<String, Object> rawConfig) {
         EsApiConfig config = EsApiConfig.parse(location, rawConfig);
         JsonRows.Table table = JsonRows.toTable(EsApiClient.call(config, true), config.path());
-        if (table.columns().isEmpty()) {
-            throw new IllegalStateException("[" + config.apiPath() + "] returned no rows" + (config.path() == null ? "" : " at [path] "
-                + config.path()) + ": the columns come from the response, so they're unknown while it's empty"
-                + (config.path() == null ? " (or point [path] at the rows)" : ""));
-        }
         List<Attribute> attributes = new ArrayList<>(table.columns().size());
         for (JsonRows.Column c : table.columns()) {
             attributes.add(new ReferenceAttribute(Source.EMPTY, null, c.name(), c.type(), Nullability.TRUE, null, false));
