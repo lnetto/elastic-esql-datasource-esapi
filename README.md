@@ -63,7 +63,7 @@ It has no settings: every call runs as whoever runs the query.
 | `esapi_cluster_health` | `_cluster/health` | Cluster status, node and shard counts (1 row) |
 | `esapi_cluster_stats` | `_cluster/stats` | Cluster-wide index, node, JVM and OS totals (1 row) |
 | `esapi_cluster_settings` | `_cluster/settings` | Persistent and transient cluster settings (1 row) |
-| `esapi_cluster_pending_tasks` | `_cluster/pending_tasks` | Cluster-state changes waiting to run |
+| `esapi_cluster_pending_tasks` | `_cluster/pending_tasks` | Cluster-state changes waiting to run. ⚪ *Usually empty* |
 | `esapi_health_report` | `_health_report` | One row per health indicator (disk, shards, ILM, …) |
 | `esapi_license` | `_license` | Licence type, status and expiry (1 row) |
 | `esapi_nodes` | `_nodes` | Node info: roles, versions, settings, plugins |
@@ -81,14 +81,14 @@ It has no settings: every call runs as whoever runs the query.
 | `esapi_cat_plugins` | `_cat/plugins` | Plugins installed on each node |
 | `esapi_cat_master` | `_cat/master` | The elected master node |
 | `esapi_cat_nodeattrs` | `_cat/nodeattrs` | Custom node attributes |
-| `esapi_cat_fielddata` | `_cat/fielddata` | Fielddata memory per field per node |
+| `esapi_cat_fielddata` | `_cat/fielddata` | Fielddata memory per field per node. ⚪ *Empty until fielddata is loaded* |
 | `esapi_cat_templates` | `_cat/templates` | Index templates (summary) |
 | `esapi_cat_component_templates` | `_cat/component_templates` | Component templates (summary) |
 | `esapi_cat_tasks` | `_cat/tasks` | Running tasks (summary) |
 | `esapi_cat_repositories` | `_cat/repositories` | Snapshot repositories |
-| `esapi_cat_transforms` | `_cat/transforms` | Transforms (summary) |
-| `esapi_cat_ml_jobs` | `_cat/ml/anomaly_detectors` | ML anomaly detection jobs (summary) |
-| `esapi_cat_ml_datafeeds` | `_cat/ml/datafeeds` | ML datafeeds (summary) |
+| `esapi_cat_transforms` | `_cat/transforms` | Transforms (summary). ⚪ *Empty without transforms* |
+| `esapi_cat_ml_jobs` | `_cat/ml/anomaly_detectors` | ML anomaly detection jobs (summary). ⚪ *Empty without ML jobs* |
+| `esapi_cat_ml_datafeeds` | `_cat/ml/datafeeds` | ML datafeeds (summary). ⚪ *Empty without datafeeds* |
 | `esapi_index_stats` | `_stats` | One row per index: full indexing, search and store stats |
 | `esapi_data_streams` | `_data_stream` | One row per data stream: backing indices, lifecycle, template |
 | `esapi_index_templates` | `_index_template` | Index templates in full (wide) |
@@ -99,15 +99,17 @@ It has no settings: every call runs as whoever runs the query.
 | `esapi_slm_policies` | `_slm/policy` | One row per snapshot lifecycle policy |
 | `esapi_snapshot_repositories` | `_snapshot` | Snapshot repositories with their settings |
 | `esapi_tasks` | `_tasks` | Running tasks in detail |
-| `esapi_transforms` | `_transform` | Transform configurations |
-| `esapi_transform_stats` | `_transform/_stats` | Transform state and progress |
-| `esapi_ml_jobs` | `_ml/anomaly_detectors` | ML anomaly detection job configurations |
-| `esapi_ml_datafeeds` | `_ml/datafeeds` | ML datafeed configurations |
+| `esapi_transforms` | `_transform` | Transform configurations. ⚪ *Empty without transforms* |
+| `esapi_transform_stats` | `_transform/_stats` | Transform state and progress. ⚪ *Empty without transforms* |
+| `esapi_ml_jobs` | `_ml/anomaly_detectors` | ML anomaly detection job configurations. ⚪ *Empty without ML jobs* |
+| `esapi_ml_datafeeds` | `_ml/datafeeds` | ML datafeed configurations. ⚪ *Empty without datafeeds* |
 | `esapi_security_authenticate` | `_security/_authenticate` | Who you are: user, roles, realm (1 row) |
 | `esapi_security_api_keys` | `_security/api_key` | Your own API keys |
 | `esapi_security_users` | `_security/user` | Native users |
 | `esapi_security_roles` | `_security/role` | Roles, name in `_key` |
 | `esapi_kibana_tasks` | `.kibana_task_manager/_search` | Kibana Task Manager tasks (up to 200) |
+
+⚪ Can be empty: the dataset then has no rows and a single `_empty` column ([Empty datasets](#empty-datasets)).
 
 Paste into Dev Tools and run all. Each dataset is one API; the name follows the path
 (`_cat/indices` → `esapi_cat_indices`).
@@ -213,9 +215,16 @@ PUT _query/dataset/esapi_kibana_tasks
 
 Then `FROM esapi_cluster_health`, `FROM esapi_nodes_stats_jvm_os`, `FROM esapi_cat_shards`, …
 
+### Empty datasets
+
 A dataset whose API has nothing to return (no transforms, no ML jobs, no pending tasks) gives no rows
 and a single null `_empty` column: the columns come from the response, so they're unknown until there
 is data. `COUNT(*)` works on it; naming a column such as `id` fails until there is data.
+
+```esql
+FROM esapi_transforms                          // _empty, no rows
+FROM esapi_transforms | STATS n = COUNT(*)     // n = 0
+```
 
 ### Your own
 
