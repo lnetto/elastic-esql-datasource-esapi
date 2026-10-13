@@ -16,10 +16,11 @@ FROM esapi_cat_indices
 
 ## 1. Install the plugin
 
-Use `dist/esql-datasource-esapi-0.1.0-es9.5.4.zip`, or build it:
+Download the zip for your exact Elasticsearch version from [Releases](../../releases/latest), such as `esql-datasource-esapi-0.1.0-es9.5.4.zip`. Zips for new Elasticsearch releases are added automatically within a day. Or build it:
 
 ```bash
 ./build-plugin.sh    # -> dist/esql-datasource-esapi-0.1.0-es9.5.4.zip
+ES_VERSION=9.5.5 ./build-plugin.sh    # another Elasticsearch version
 ```
 
 **Self-managed**, on every node, then restart them one by one:
