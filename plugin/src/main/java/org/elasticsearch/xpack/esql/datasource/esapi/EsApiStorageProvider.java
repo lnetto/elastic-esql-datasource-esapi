@@ -75,7 +75,7 @@ public final class EsApiStorageProvider implements StorageProvider {
         return EsApiConfig.SCHEME.equals(scheme);
     }
 
-    private record ApiObject(StoragePath path, long knownLength, Instant knownLastModified) implements StorageObject {
+    private record ApiObject(StoragePath path, long knownLength, Instant knownLastModified) implements CompatStorageObject {
 
         @Override
         public InputStream newStream() throws IOException {
